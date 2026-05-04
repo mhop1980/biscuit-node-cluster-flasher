@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biscuit Node Cluster Flasher — 12-Node ESP32-C5</title>
+<script type="module">
+// Import esptool-js from CDN
+import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.6.0/bundle.js';
+window._ESPLoader  = ESPLoader;
+window._Transport  = Transport;
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #080c10;
+    --bg2: #0d1117;
+    --bg3: #111820;
+    --border: #1a2535;
+    --border2: #243040;
+    --green: #00ff88;
+    --green2: #00cc6a;
+    --green3: #004422;
+    --amber: #ffaa00;
+    --red: #ff3355;
+    --blue: #00aaff;
+    --text: #c8d8e8;
+    --text2: #6080a0;
+    --text3: #304050;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 44px;
+    height: 44px;
+    border: 2px solid var(--green);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 0 20px rgba(0,255,136,0.2);
+  }
+
+  .logo-icon svg { width: 24px; height: 24px; }
+
+  .logo-text h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #fff;
+  }
+
+  .logo-text p {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--text2);
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text3);
+    transition: all 0.3s;
+  }
+
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  /* Main layout */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+  }
+
+  /* Panel */
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 12px 18px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text2);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .panel-body { padding: 18px; }
+
+  /* Connection section */
+  .connect-section {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn:hover { border-color: var(--green); color: var(--green); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--green3);
+    border-color: var(--green2);
+    color: var(--green);
+    box-shadow: 0 0 20px rgba(0,255,136,0.1);
+  }
+
+  .btn-primary:hover {
+    background: rgba(0,255,136,0.15);
+    box-shadow: 0 0 30px rgba(0,255,136,0.2);
+    color: var(--green);
+    border-color: var(--green);
+  }
+
+  .btn-danger { border-color: #ff335540; color: var(--red); }
+  .btn-danger:hover { background: rgba(255,51,85,0.1); border-color: var(--red); color: var(--red); }
+
+  .btn-small { padding: 6px 12px; font-size: 11px; }
+
+  /* Node grid */
+  .node-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .node-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .node-card:hover { border-color: var(--border2); }
+
+  .node-card.selected {
+    border-color: var(--green);
+    background: rgba(0,255,136,0.05);
+    box-shadow: 0 0 15px rgba(0,255,136,0.1);
+  }
+
+  .node-card.flashing {
+    border-color: var(--amber);
+    background: rgba(255,170,0,0.05);
+    animation: flashPulse 1s infinite;
+  }
+
+  .node-card.success {
+    border-color: var(--green2);
+    background: rgba(0,204,106,0.08);
+  }
+
+  .node-card.error {
+    border-color: var(--red);
+    background: rgba(255,51,85,0.05);
+  }
+
+  .node-card.all-select {
+    border-style: dashed;
+  }
+
+  @keyframes flashPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(255,170,0,0.2); }
+    50% { box-shadow: 0 0 25px rgba(255,170,0,0.4); }
+  }
+
+  .node-number {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--text2);
+    transition: color 0.2s;
+  }
+
+  .node-card.selected .node-number { color: var(--green); }
+  .node-card.flashing .node-number { color: var(--amber); }
+  .node-card.success .node-number { color: var(--green2); }
+  .node-card.error .node-number { color: var(--red); }
+
+  .node-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .node-status {
+    font-size: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text3);
+    margin-top: 6px;
+    height: 14px;
+    transition: color 0.2s;
+  }
+
+  .node-card.selected .node-status { color: var(--green); }
+  .node-card.flashing .node-status { color: var(--amber); }
+  .node-card.success .node-status { color: var(--green2); }
+  .node-card.error .node-status { color: var(--red); }
+
+  .node-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: var(--amber);
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  /* Flash controls */
+  .flash-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .file-input-wrapper {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .file-input-wrapper input[type=file] {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+
+  .file-display {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--text2);
+    padding: 10px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    min-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Terminal */
+  .terminal {
+    background: #050810;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    height: 220px;
+    overflow-y: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    margin-top: 16px;
+  }
+
+  .terminal::-webkit-scrollbar { width: 4px; }
+  .terminal::-webkit-scrollbar-track { background: transparent; }
+  .terminal::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .log-line { display: block; }
+  .log-info { color: var(--text2); }
+  .log-success { color: var(--green); }
+  .log-warning { color: var(--amber); }
+  .log-error { color: var(--red); }
+  .log-data { color: var(--blue); }
+  .log-prompt { color: var(--green2); }
+
+  /* Right panel */
+  .right-panel { display: flex; flex-direction: column; gap: 16px; }
+
+  /* Schematic */
+  .schematic {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .schematic svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Info cards */
+  .info-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .info-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .info-table tr {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-table tr:last-child { border-bottom: none; }
+
+  .info-table td {
+    padding: 9px 14px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .info-table td:first-child {
+    color: var(--text2);
+    width: 40%;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  .info-table td:last-child { color: var(--text); }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .tag-green { background: var(--green3); color: var(--green); border: 1px solid var(--green2); }
+  .tag-amber { background: rgba(255,170,0,0.1); color: var(--amber); border: 1px solid rgba(255,170,0,0.3); }
+  .tag-red { background: rgba(255,51,85,0.1); color: var(--red); border: 1px solid rgba(255,51,85,0.3); }
+
+  /* Progress bar */
+  .progress-section { margin-top: 14px; }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text2);
+    font-family: 'Share Tech Mono', monospace;
+    margin-bottom: 6px;
+  }
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green2), var(--green));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 8px var(--green);
+  }
+
+  /* Select all row */
+  .select-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 14px 0;
+  }
+
+  /* Baud/chip selects */
+  select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  select:focus { border-color: var(--green); }
+
+  label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text2);
+    text-transform: uppercase;
+  }
+
+  .form-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* Scanning animation on selected node */
+  .node-card.flashing::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,170,0,0.1), transparent);
+    animation: scanLine 1.5s infinite;
+  }
+
+  @keyframes scanLine {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  /* WebSerial not supported warning */
+  .warning-banner {
+    background: rgba(255,170,0,0.08);
+    border: 1px solid rgba(255,170,0,0.3);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--amber);
+    display: none;
+    margin-bottom: 16px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .warning-banner.visible { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#00ff88" stroke-width="1.5">
+          <rect x="2" y="6" width="20" height="12" rx="2"/>
+          <circle cx="8" cy="12" r="2"/>
+          <circle cx="16" cy="12" r="2"/>
+          <path d="M10 12h4"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <h1>Biscuit Node</h1>
+        <p>Cluster Flash Utility v1.0</p>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText" style="color:var(--text2)">NOT CONNECTED</span>
+    </div>
+  </header>
+
+  <div class="warning-banner" id="warnBanner">
+    ⚠ WebSerial not supported. Use Chrome or Edge browser.
+  </div>
+
+  <div class="main-grid">
+    <!-- Left: Main flasher -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Connection</span>
+        </div>
+        <div class="panel-body">
+          <div class="connect-section">
+            <button class="btn btn-primary" id="connectBtn" onclick="connectSerial()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              Connect USB-UART
+            </button>
+            <button class="btn btn-danger" id="disconnectBtn" onclick="disconnectSerial()" disabled>Disconnect</button>
+            <div class="form-row" style="margin:0">
+              <label>Baud</label>
+              <select id="baudSelect">
+                <option value="921600" selected>921600</option>
+                <option value="460800">460800</option>
+                <option value="115200">115200</option>
+              </select>
+              <label>Chip</label>
+              <select id="chipSelect">
+                <option value="esp32c5" selected>ESP32-C5</option>
+                <option value="esp32">ESP32</option>
+                <option value="esp32s3">ESP32-S3</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="panel-header" style="margin: -18px -18px 18px; padding: 12px 18px;">
+            <span class="panel-title">Select Nodes</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-small" onclick="selectAll()">Select All</button>
+              <button class="btn btn-small" onclick="selectNone()">Clear</button>
+            </div>
+          </div>
+
+          <div class="node-grid" id="nodeGrid"></div>
+
+          <div class="divider"></div>
+
+          <div class="panel-header" style="margin: -18px -18px 18px; padding: 12px 18px;">
+            <span class="panel-title">Firmware</span>
+            <button class="btn btn-small" onclick="fetchFirmware()" id="fetchBtn">⬇ Fetch Latest</button>
+          </div>
+
+          <!-- Firmware status bar -->
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:11px;color:var(--text2);font-family:'Share Tech Mono',monospace;letter-spacing:1px;margin-bottom:3px">BISCUIT NODE FIRMWARE</div>
+              <div id="fwVersion" style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text3)">Not fetched</div>
+            </div>
+            <div id="fwStatus" style="font-size:11px;font-family:'Share Tech Mono',monospace;color:var(--text3)">—</div>
+          </div>
+
+          <div class="flash-controls">
+            <button class="btn btn-primary" id="flashBtn" onclick="startFlash()" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Flash Selected
+            </button>
+            <button class="btn" onclick="verifySelected()" id="verifyBtn" disabled>Verify</button>
+            <div style="margin-left:auto;font-size:11px;color:var(--text3);font-family:'Share Tech Mono',monospace" id="fwSize"></div>
+          </div>
+
+          <div class="progress-section" id="progressSection" style="display:none">
+            <div class="progress-label">
+              <span id="progressLabel">Flashing node 1...</span>
+              <span id="progressPct">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+          </div>
+
+          <div class="terminal" id="terminal">
+            <span class="log-line log-prompt">// Biscuit Node Cluster Flasher</span><br>
+            <span class="log-line log-info">// Connect CP2102N USB-UART dongle to begin</span><br>
+            <span class="log-line log-info">// Supports 12-node ESP32-C5 cluster via CD74HC4067 mux</span><br>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Schematic + Info -->
+    <div class="right-panel">
+
+      <!-- Schematic -->
+      <div class="schematic">
+        <div class="panel-header">
+          <span class="panel-title">Wiring Schematic</span>
+        </div>
+        <svg viewBox="0 0 320 420" xmlns="http://www.w3.org/2000/svg" style="background:#050810;padding:16px">
+          <defs>
+            <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#304050"/>
+            </marker>
+          </defs>
+
+          <!-- USB-C input -->
+          <rect x="110" y="10" width="80" height="28" rx="4" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="150" y="29" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#00ff88">USB-C (PC)</text>
+
+          <!-- CP2102N -->
+          <rect x="90" y="56" width="120" height="40" rx="4" fill="#0d1117" stroke="#243040" stroke-width="1"/>
+          <text x="150" y="72" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#c8d8e8">CP2102N</text>
+          <text x="150" y="86" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#6080a0">USB-UART BRIDGE</text>
+          <!-- CP2102N pins -->
+          <text x="88" y="70" text-anchor="end" font-family="Share Tech Mono" font-size="7" fill="#6080a0">TX</text>
+          <text x="88" y="82" text-anchor="end" font-family="Share Tech Mono" font-size="7" fill="#6080a0">RX</text>
+          <text x="212" y="70" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">GPIO0</text>
+          <text x="212" y="78" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">GPIO1</text>
+          <text x="212" y="86" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">GPIO2</text>
+          <text x="212" y="94" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">GPIO3</text>
+
+          <!-- USB line -->
+          <line x1="150" y1="38" x2="150" y2="56" stroke="#304050" stroke-width="1.5" stroke-dasharray="3,2"/>
+
+          <!-- CD74HC4067 Mux -->
+          <rect x="80" y="130" width="140" height="50" rx="4" fill="#0d1117" stroke="#243040" stroke-width="1"/>
+          <text x="150" y="150" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#c8d8e8">CD74HC4067</text>
+          <text x="150" y="164" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#6080a0">16:1 UART MUX</text>
+          <text x="78" y="148" text-anchor="end" font-family="Share Tech Mono" font-size="7" fill="#6080a0">COM</text>
+          <text x="222" y="145" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">S0</text>
+          <text x="222" y="153" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">S1</text>
+          <text x="222" y="161" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">S2</text>
+          <text x="222" y="169" text-anchor="start" font-family="Share Tech Mono" font-size="7" fill="#00aaff">S3</text>
+
+          <!-- TX line CP to Mux -->
+          <line x1="90" y1="68" x2="60" y2="68" stroke="#00ff88" stroke-width="1"/>
+          <line x1="60" y1="68" x2="60" y2="148" stroke="#00ff88" stroke-width="1"/>
+          <line x1="60" y1="148" x2="80" y2="148" stroke="#00ff88" stroke-width="1"/>
+          <text x="56" y="112" text-anchor="end" font-family="Share Tech Mono" font-size="7" fill="#00ff88">TX</text>
+
+          <!-- RX line -->
+          <line x1="90" y1="80" x2="55" y2="80" stroke="#ffaa00" stroke-width="1"/>
+          <line x1="55" y1="80" x2="55" y2="155" stroke="#ffaa00" stroke-width="1"/>
+          <line x1="55" y1="155" x2="80" y2="155" stroke="#ffaa00" stroke-width="1"/>
+          <text x="51" y="120" text-anchor="end" font-family="Share Tech Mono" font-size="7" fill="#ffaa00">RX</text>
+
+          <!-- GPIO select lines -->
+          <line x1="210" y1="76" x2="240" y2="76" stroke="#00aaff" stroke-width="1"/>
+          <line x1="240" y1="76" x2="240" y2="145" stroke="#00aaff" stroke-width="1"/>
+          <line x1="240" y1="145" x2="220" y2="145" stroke="#00aaff" stroke-width="1"/>
+
+          <line x1="210" y1="84" x2="245" y2="84" stroke="#00aaff" stroke-width="1"/>
+          <line x1="245" y1="84" x2="245" y2="153" stroke="#00aaff" stroke-width="1"/>
+          <line x1="245" y1="153" x2="220" y2="153" stroke="#00aaff" stroke-width="1"/>
+
+          <line x1="210" y1="92" x2="250" y2="92" stroke="#00aaff" stroke-width="1"/>
+          <line x1="250" y1="92" x2="250" y2="161" stroke="#00aaff" stroke-width="1"/>
+          <line x1="250" y1="161" x2="220" y2="161" stroke="#00aaff" stroke-width="1"/>
+
+          <line x1="210" y1="98" x2="255" y2="98" stroke="#00aaff" stroke-width="1"/>
+          <line x1="255" y1="98" x2="255" y2="169" stroke="#00aaff" stroke-width="1"/>
+          <line x1="255" y1="169" x2="220" y2="169" stroke="#00aaff" stroke-width="1"/>
+
+          <!-- Node outputs from mux -->
+          <!-- 12 channel lines going down -->
+          <text x="150" y="200" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#304050">CH0–CH11 → UART TX/RX</text>
+
+          <!-- Node grid (3x4) -->
+          <!-- Row 1 -->
+          <rect x="14" y="215" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="40" y="228" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 1</text>
+          <text x="40" y="238" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="76" y="215" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="102" y="228" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 2</text>
+          <text x="102" y="238" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="138" y="215" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="164" y="228" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 3</text>
+          <text x="164" y="238" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="200" y="215" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="226" y="228" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 4</text>
+          <text x="226" y="238" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <!-- Row 2 -->
+          <rect x="14" y="255" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="40" y="268" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 5</text>
+          <text x="40" y="278" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="76" y="255" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="102" y="268" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 6</text>
+          <text x="102" y="278" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="138" y="255" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="164" y="268" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 7</text>
+          <text x="164" y="278" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="200" y="255" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="226" y="268" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 8</text>
+          <text x="226" y="278" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <!-- Row 3 -->
+          <rect x="14" y="295" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="40" y="308" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 9</text>
+          <text x="40" y="318" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="76" y="295" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="102" y="308" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 10</text>
+          <text x="102" y="318" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="138" y="295" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="164" y="308" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 11</text>
+          <text x="164" y="318" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <rect x="200" y="295" width="52" height="30" rx="3" fill="#0d1117" stroke="#1a2535" stroke-width="1"/>
+          <text x="226" y="308" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#c8d8e8">NODE 12</text>
+          <text x="226" y="318" text-anchor="middle" font-family="Share Tech Mono" font-size="7" fill="#6080a0">ESP32-C5</text>
+
+          <!-- Mux to nodes lines -->
+          <line x1="150" y1="180" x2="150" y2="207" stroke="#304050" stroke-width="1" stroke-dasharray="2,2"/>
+          <line x1="30" y1="207" x2="265" y2="207" stroke="#304050" stroke-width="1"/>
+          <line x1="40" y1="207" x2="40" y2="215" stroke="#1a2535" stroke-width="1"/>
+          <line x1="102" y1="207" x2="102" y2="215" stroke="#1a2535" stroke-width="1"/>
+          <line x1="164" y1="207" x2="164" y2="215" stroke="#1a2535" stroke-width="1"/>
+          <line x1="226" y1="207" x2="226" y2="215" stroke="#1a2535" stroke-width="1"/>
+          <line x1="40" y1="245" x2="40" y2="255" stroke="#1a2535" stroke-width="1"/>
+          <line x1="102" y1="245" x2="102" y2="255" stroke="#1a2535" stroke-width="1"/>
+          <line x1="164" y1="245" x2="164" y2="255" stroke="#1a2535" stroke-width="1"/>
+          <line x1="226" y1="245" x2="226" y2="255" stroke="#1a2535" stroke-width="1"/>
+          <line x1="40" y1="285" x2="40" y2="295" stroke="#1a2535" stroke-width="1"/>
+          <line x1="102" y1="285" x2="102" y2="295" stroke="#1a2535" stroke-width="1"/>
+          <line x1="164" y1="285" x2="164" y2="295" stroke="#1a2535" stroke-width="1"/>
+          <line x1="226" y1="285" x2="226" y2="295" stroke="#1a2535" stroke-width="1"/>
+
+          <!-- Power rail -->
+          <rect x="14" y="338" width="262" height="16" rx="3" fill="#0d1117" stroke="#004422" stroke-width="1"/>
+          <text x="145" y="350" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#00cc6a">3.3V POWER RAIL (AMS1117-3.3)</text>
+
+          <!-- Power lines to nodes -->
+          <line x1="40" y1="325" x2="40" y2="338" stroke="#004422" stroke-width="1"/>
+          <line x1="102" y1="325" x2="102" y2="338" stroke="#004422" stroke-width="1"/>
+          <line x1="164" y1="325" x2="164" y2="338" stroke="#004422" stroke-width="1"/>
+          <line x1="226" y1="325" x2="226" y2="338" stroke="#004422" stroke-width="1"/>
+
+          <!-- USB power in -->
+          <line x1="150" y1="354" x2="150" y2="370" stroke="#004422" stroke-width="1"/>
+          <rect x="110" y="370" width="80" height="22" rx="3" fill="#0d1117" stroke="#004422" stroke-width="1"/>
+          <text x="150" y="385" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#00cc6a">5V → 3.3V REG</text>
+
+          <!-- GND rail -->
+          <rect x="14" y="400" width="262" height="14" rx="3" fill="#050810" stroke="#1a2535" stroke-width="1"/>
+          <text x="145" y="411" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#304050">GND</text>
+        </svg>
+      </div>
+
+      <!-- Pin reference -->
+      <div class="info-card">
+        <div class="panel-header">
+          <span class="panel-title">CP2102N Pin Map</span>
+        </div>
+        <table class="info-table">
+          <tr><td>TX → COM</td><td>Mux data in</td></tr>
+          <tr><td>RX ← COM</td><td>Mux data out</td></tr>
+          <tr><td>GPIO0 → S0</td><td>Mux select bit 0</td></tr>
+          <tr><td>GPIO1 → S1</td><td>Mux select bit 1</td></tr>
+          <tr><td>GPIO2 → S2</td><td>Mux select bit 2</td></tr>
+          <tr><td>GPIO3 → S3</td><td>Mux select bit 3</td></tr>
+          <tr><td>Node select</td><td><span class="tag tag-green">0–11 binary</span></td></tr>
+        </table>
+      </div>
+
+      <!-- Parts ref -->
+      <div class="info-card">
+        <div class="panel-header">
+          <span class="panel-title">Key Components</span>
+        </div>
+        <table class="info-table">
+          <tr><td>UART Bridge</td><td>CP2102N</td></tr>
+          <tr><td>Mux</td><td>CD74HC4067</td></tr>
+          <tr><td>Regulator</td><td>AMS1117-3.3</td></tr>
+          <tr><td>Nodes</td><td>ESP32-C5-WROOM-1</td></tr>
+          <tr><td>Decoupling</td><td>100nF per VCC pin</td></tr>
+          <tr><td>Bulk cap</td><td>10μF per 3 nodes</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Constants ────────────────────────────────────────────────────
+const MANIFEST_URL = 'https://codehedge.github.io/diy_node_web_flasher/resources/BISCUIT/CURRENT/manifest.json';
+const BASE_URL     = 'https://codehedge.github.io/diy_node_web_flasher/';
+const NODE_ID      = 'BISCUIT_NODE_C5';
+
+// Flash offsets from manifest
+const FLASH_OFFSETS = { bootloader: 0x2000, partitions: 0x8000, firmware: 0x10000 };
+
+// ─── State ────────────────────────────────────────────────────────
+let port          = null;
+let selectedNodes = new Set();
+let isFlashing    = false;
+let firmwareData  = null;   // { bootloader, partitions, firmware } as Uint8Arrays
+let firmwareVersion = null;
+
+// ─── Node grid ────────────────────────────────────────────────────
+function initNodes() {
+  const grid = document.getElementById('nodeGrid');
+  grid.innerHTML = '';
+  for (let i = 1; i <= 12; i++) {
+    const card = document.createElement('div');
+    card.className = 'node-card';
+    card.id = `node-${i}`;
+    card.onclick = () => toggleNode(i);
+    card.innerHTML = `
+      <div class="node-number">N${String(i).padStart(2,'0')}</div>
+      <div class="node-label">ESP32-C5</div>
+      <div class="node-status" id="status-${i}">idle</div>
+      <div class="node-progress" id="prog-${i}"></div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function toggleNode(n) {
+  if (isFlashing) return;
+  const card = document.getElementById(`node-${n}`);
+  if (selectedNodes.has(n)) {
+    selectedNodes.delete(n);
+    card.classList.remove('selected');
+    setNodeStatus(n, 'idle', 'idle');
+  } else {
+    selectedNodes.add(n);
+    card.classList.add('selected');
+    setNodeStatus(n, 'selected', 'ready');
+  }
+  updateFlashBtn();
+}
+
+function selectAll() {
+  for (let i = 1; i <= 12; i++) {
+    selectedNodes.add(i);
+    document.getElementById(`node-${i}`).classList.add('selected');
+    setNodeStatus(i, 'selected', 'ready');
+  }
+  updateFlashBtn();
+}
+
+function selectNone() {
+  selectedNodes.clear();
+  for (let i = 1; i <= 12; i++) {
+    const card = document.getElementById(`node-${i}`);
+    card.className = 'node-card';
+    setNodeStatus(i, 'idle', 'idle');
+  }
+  updateFlashBtn();
+}
+
+function setNodeStatus(n, state, text) {
+  const card = document.getElementById(`node-${n}`);
+  card.className = 'node-card ' + (state !== 'idle' ? state : '');
+  document.getElementById(`status-${n}`).textContent = text;
+}
+
+function setNodeProgress(n, pct) {
+  document.getElementById(`prog-${n}`).style.width = pct + '%';
+}
+
+function updateFlashBtn() {
+  document.getElementById('flashBtn').disabled  = selectedNodes.size === 0 || !firmwareData || isFlashing;
+  document.getElementById('verifyBtn').disabled = selectedNodes.size === 0 || isFlashing;
+}
+
+// ─── Firmware fetch ────────────────────────────────────────────────
+async function fetchFirmware() {
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  btn.textContent = '⟳ Fetching...';
+  document.getElementById('fwVersion').textContent = 'Checking manifest...';
+  document.getElementById('fwStatus').textContent = '—';
+  log('Fetching manifest from Biscuit firmware server...', 'info');
+
+  try {
+    // 1 — fetch manifest
+    const manifestRes = await fetch(MANIFEST_URL + '?t=' + Date.now());
+    if (!manifestRes.ok) throw new Error(`Manifest fetch failed: ${manifestRes.status}`);
+    const manifest = await manifestRes.json();
+
+    const device = manifest.devices.find(d => d.id === NODE_ID);
+    if (!device) throw new Error('BISCUIT_NODE_C5 not found in manifest');
+
+    firmwareVersion = device.version;
+    log(`Manifest OK — Node firmware v${firmwareVersion}`, 'success');
+    document.getElementById('fwVersion').textContent = `v${firmwareVersion}`;
+    document.getElementById('fwStatus').innerHTML = '<span style="color:var(--amber)">Downloading...</span>';
+
+    // 2 — download all three binaries in parallel
+    log('Downloading bootloader, partition table and firmware...', 'info');
+    const [blRes, ptRes, fwRes] = await Promise.all([
+      fetch(BASE_URL + device.files.bootloader + '?t=' + Date.now()),
+      fetch(BASE_URL + device.files.partitions  + '?t=' + Date.now()),
+      fetch(BASE_URL + device.files.firmware    + '?t=' + Date.now()),
+    ]);
+
+    if (!blRes.ok) throw new Error(`Bootloader download failed: ${blRes.status}`);
+    if (!ptRes.ok) throw new Error(`Partitions download failed: ${ptRes.status}`);
+    if (!fwRes.ok) throw new Error(`Firmware download failed: ${fwRes.status}`);
+
+    firmwareData = {
+      bootloader: new Uint8Array(await blRes.arrayBuffer()),
+      partitions:  new Uint8Array(await ptRes.arrayBuffer()),
+      firmware:    new Uint8Array(await fwRes.arrayBuffer()),
+    };
+
+    const totalKB = ((firmwareData.bootloader.length + firmwareData.partitions.length + firmwareData.firmware.length) / 1024).toFixed(1);
+    document.getElementById('fwVersion').textContent = `v${firmwareVersion}`;
+    document.getElementById('fwStatus').innerHTML   = '<span style="color:var(--green)">Ready ✓</span>';
+    document.getElementById('fwSize').textContent   = `${totalKB} KB total`;
+
+    log(`Bootloader:  ${(firmwareData.bootloader.length/1024).toFixed(1)} KB  @ 0x${FLASH_OFFSETS.bootloader.toString(16)}`, 'data');
+    log(`Partitions:  ${(firmwareData.partitions.length/1024).toFixed(1)} KB  @ 0x${FLASH_OFFSETS.partitions.toString(16)}`, 'data');
+    log(`Firmware:    ${(firmwareData.firmware.length/1024).toFixed(1)} KB  @ 0x${FLASH_OFFSETS.firmware.toString(16)}`, 'data');
+    log('All firmware files downloaded and ready.', 'success');
+
+    updateFlashBtn();
+  } catch(e) {
+    log(`Firmware fetch error: ${e.message}`, 'error');
+    document.getElementById('fwVersion').textContent = 'Fetch failed';
+    document.getElementById('fwStatus').innerHTML = '<span style="color:var(--red)">Error ✗</span>';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⬇ Fetch Latest';
+}
+
+// ─── Serial connection ─────────────────────────────────────────────
+async function connectSerial() {
+  if (!('serial' in navigator)) {
+    document.getElementById('warnBanner').classList.add('visible');
+    log('WebSerial not supported. Use Chrome or Edge.', 'error');
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    const baud = parseInt(document.getElementById('baudSelect').value);
+    await port.open({ baudRate: baud });
+    setStatus('connected', 'CONNECTED');
+    document.getElementById('connectBtn').disabled    = true;
+    document.getElementById('disconnectBtn').disabled = false;
+    log(`Serial connected at ${baud} baud`, 'success');
+    log('CP2102N GPIO0-3 → CD74HC4067 S0-S3 mux select', 'info');
+  } catch(e) {
+    log(`Connection failed: ${e.message}`, 'error');
+  }
+}
+
+async function disconnectSerial() {
+  try {
+    if (port) { await port.close(); port = null; }
+    setStatus('idle', 'NOT CONNECTED');
+    document.getElementById('connectBtn').disabled    = false;
+    document.getElementById('disconnectBtn').disabled = true;
+    log('Disconnected', 'warning');
+  } catch(e) {
+    log(`Disconnect error: ${e.message}`, 'error');
+  }
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'error' ? 'error' : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+// ─── MUX select via CP2102N GPIO ───────────────────────────────────
+// CP2102N RTS/DTR can only give us 2 bits natively (nodes 1-4)
+// For full 12-node support, send a mux select byte over serial to a
+// small ATtiny/microcontroller acting as GPIO expander on the cluster PCB
+// Protocol: 0xAA (magic) + channel byte (0-11)
+async function setMuxChannel(n) {
+  if (!port) {
+    log(`[MUX] No port — skipping mux select`, 'warning');
+    return;
+  }
+  const bits = (n - 1) & 0x0F;
+  try {
+    const writer = port.writable.getWriter();
+    await writer.write(new Uint8Array([0xAA, bits]));
+    writer.releaseLock();
+    await sleep(80); // Allow mux to settle before flash
+  } catch(e) {
+    log(`[MUX] Select error: ${e.message}`, 'error');
+  }
+}
+
+// ─── Real esptool-js flash ──────────────────────────────────────────
+async function flashNode(n) {
+  // Wait for ESPLoader to be available from the module import
+  const ESPLoader = window._ESPLoader;
+  const Transport = window._Transport;
+  if (!ESPLoader || !Transport) {
+    throw new Error('esptool-js not loaded yet — wait a moment and retry');
+  }
+
+  // Build terminal that pipes to our log
+  const terminal = {
+    clean() {},
+    writeLine(data) { if (data.trim()) log(`[N${String(n).padStart(2,'0')}] ${data.trim()}`, 'data'); },
+    write(data)     { if (data.trim()) log(`[N${String(n).padStart(2,'0')}] ${data.trim()}`, 'data'); },
+  };
+
+  // Each node needs its own serial port connection
+  // In the cluster setup the mux routes one serial line to the selected node
+  // so we reuse the already-opened port
+  const transport = new Transport(port, true);
+  const baud      = parseInt(document.getElementById('baudSelect').value);
+
+  const esploader = new ESPLoader({
+    transport,
+    baudrate: baud,
+    terminal,
+    debugLogging: false,
+  });
+
+  // Connect — this resets the chip into bootloader mode
+  setNodeStatus(n, 'flashing', 'connecting');
+  log(`[N${String(n).padStart(2,'0')}] Connecting at ${baud} baud...`, 'info');
+  const chipName = await esploader.main();
+  log(`[N${String(n).padStart(2,'0')}] Chip: ${chipName}`, 'success');
+
+  // Prepare fileArray with all three segments
+  // esptool-js needs binary data as base64 strings
+  const toBase64 = (buf) => {
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+
+  setNodeStatus(n, 'flashing', 'erasing');
+  log(`[N${String(n).padStart(2,'0')}] Writing 3 segments...`, 'info');
+
+  let lastPct = 0;
+  await esploader.writeFlash({
+    fileArray: [
+      { data: toBase64(firmwareData.bootloader), address: FLASH_OFFSETS.bootloader },
+      { data: toBase64(firmwareData.partitions),  address: FLASH_OFFSETS.partitions  },
+      { data: toBase64(firmwareData.firmware),    address: FLASH_OFFSETS.firmware    },
+    ],
+    flashMode:  'dio',
+    flashFreq:  '40m',
+    flashSize:  'keep',
+    eraseAll:   false,
+    compress:   true,
+    reportProgress: (fileIndex, written, total) => {
+      // Map 3 files to 0-100% overall
+      const fileNames = ['bootloader', 'partitions', 'firmware'];
+      const pct = Math.round(((fileIndex * 100) + (written / total * 100)) / 3);
+      if (pct !== lastPct) {
+        lastPct = pct;
+        setNodeProgress(n, pct);
+        setNodeStatus(n, 'flashing', `${fileNames[fileIndex]} ${Math.round(written/total*100)}%`);
+      }
+    },
+  });
+
+  // Hard reset after flash
+  await esploader.after('hard_reset');
+  await transport.disconnect();
+}
+
+// ─── Flash sequence ─────────────────────────────────────────────────
+async function startFlash() {
+  if (isFlashing || selectedNodes.size === 0 || !firmwareData) return;
+
+  if (!port) {
+    log('Connect a serial port first', 'error');
+    return;
+  }
+
+  isFlashing = true;
+  updateFlashBtn();
+
+  const nodes = Array.from(selectedNodes).sort((a,b) => a-b);
+  const total = nodes.length;
+
+  document.getElementById('progressSection').style.display = 'block';
+  log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+  log(`Flash job: ${total} node(s) — Biscuit Node v${firmwareVersion}`, 'success');
+
+  let successCount = 0;
+  let failCount    = 0;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+
+    document.getElementById('progressLabel').textContent = `Node ${n} (${i+1}/${total})`;
+    document.getElementById('progressPct').textContent   = Math.round((i/total)*100) + '%';
+    document.getElementById('progressFill').style.width  = Math.round((i/total)*100) + '%';
+
+    // Step 1 — MUX select
+    setNodeStatus(n, 'flashing', 'mux select');
+    log(`[MUX] S0-S3 = ${(n-1).toString(2).padStart(4,'0')} → Node ${n}`, 'data');
+    await setMuxChannel(n);
+
+    // Step 2 — Flash via esptool-js
+    try {
+      await flashNode(n);
+      successCount++;
+      setNodeStatus(n, 'success', `v${firmwareVersion} ✓`);
+      setNodeProgress(n, 100);
+      log(`[N${String(n).padStart(2,'0')}] ✓ Flash complete`, 'success');
+    } catch(e) {
+      failCount++;
+      setNodeStatus(n, 'error', 'failed ✗');
+      log(`[N${String(n).padStart(2,'0')}] ✗ ${e.message}`, 'error');
+    }
+
+    document.getElementById('progressFill').style.width  = Math.round(((i+1)/total)*100) + '%';
+    document.getElementById('progressPct').textContent   = Math.round(((i+1)/total)*100) + '%';
+
+    // Small gap between nodes so mux can settle
+    if (i < nodes.length - 1) await sleep(500);
+  }
+
+  document.getElementById('progressLabel').textContent = 'Complete';
+  document.getElementById('progressPct').textContent   = '100%';
+  document.getElementById('progressFill').style.width  = '100%';
+  log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+  log(`Done: ${successCount} OK${failCount > 0 ? '  ' + failCount + ' failed' : ''}`, failCount > 0 ? 'warning' : 'success');
+
+  isFlashing = false;
+  updateFlashBtn();
+}
+
+async function verifySelected() {
+  if (!firmwareData) { log('No firmware loaded — fetch first', 'warning'); return; }
+  log('Verify reads chip info from each selected node via esptool-js', 'info');
+  const ESPLoader = window._ESPLoader;
+  const Transport = window._Transport;
+  if (!ESPLoader || !Transport) { log('esptool-js not ready', 'error'); return; }
+
+  const nodes = Array.from(selectedNodes).sort((a,b) => a-b);
+  for (const n of nodes) {
+    setNodeStatus(n, 'flashing', 'verifying');
+    await setMuxChannel(n);
+    try {
+      const transport = new Transport(port, true);
+      const esp = new ESPLoader({ transport, baudrate: 115200 });
+      const chip = await esp.main('no_reset');
+      await transport.disconnect();
+      setNodeStatus(n, 'success', `${chip} ✓`);
+      log(`[N${String(n).padStart(2,'0')}] ${chip} — OK`, 'success');
+    } catch(e) {
+      setNodeStatus(n, 'error', 'no response');
+      log(`[N${String(n).padStart(2,'0')}] No response: ${e.message}`, 'error');
+    }
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function log(msg, type='info') {
+  const term = document.getElementById('terminal');
+  const span = document.createElement('span');
+  span.className = `log-line log-${type}`;
+  const t = new Date().toTimeString().slice(0,8);
+  span.textContent = `[${t}] ${msg}`;
+  term.appendChild(span);
+  term.appendChild(document.createElement('br'));
+  term.scrollTop = term.scrollHeight;
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────
+if (!('serial' in navigator)) {
+  document.getElementById('warnBanner').classList.add('visible');
+}
+
+initNodes();
+log('Ready — esptool-js v0.6.0 loaded (Espressif official)', 'prompt');
+log('1. Click "Fetch Latest" to download Biscuit Node firmware', 'info');
+log('2. Connect CP2102N USB-UART via "Connect USB-UART"', 'info');
+log('3. Select nodes to flash, then click "Flash Selected"', 'info');
+log('Chrome/Edge only — WebSerial required', 'info');
+</script>
+</body>
+</html>
